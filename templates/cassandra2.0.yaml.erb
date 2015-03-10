@@ -371,6 +371,12 @@ rpc_server_type: <%= @rpc_server_type %>
 #
 # rpc_min_threads: 16
 # rpc_max_threads: 2048
+<% if @rpc_min_threads > 0 -%>
+rpc_min_threads: <%= @rpc_min_threads %>
+<% end -%>
+<% if @rpc_max_threads > 0 -%>
+rpc_max_threads: <%= @rpc_max_threads %>
+<% end -%>
 
 # uncomment to set socket buffer sizes on rpc connections
 # rpc_send_buff_size_in_bytes:
