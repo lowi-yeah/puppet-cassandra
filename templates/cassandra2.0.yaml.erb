@@ -29,7 +29,9 @@ num_tokens: <%= @num_tokens %>
 # vnodes (num_tokens > 1, above) -- in which case you should provide a 
 # comma-separated list -- it's primarily used when adding nodes # to legacy clusters 
 # that do not have vnodes enabled.
+<% unless @initial_token.nil? || @initial_token.empty? -%>
 initial_token: <%= @initial_token %>
+<% end -%>
 
 # See http://wiki.apache.org/cassandra/HintedHandoff
 hinted_handoff_enabled: true
