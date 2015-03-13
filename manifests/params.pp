@@ -346,4 +346,20 @@ class cassandra::params {
         default => $::cassandra_client_encryption_cipher_suites,
     }
 
+    $dc = $::cassandra_dc ? {
+        undef   => 'DC1',
+        default => $::cassandra_dc,
+    }
+    $rack = $::cassandra_rack ? {
+        undef   => 'RAC1',
+        default => $::cassandra_rack,
+    }
+    $dc_suffix = $::cassandra_dc_suffix ? {
+        undef   => '',
+        default => $::cassandra_dc_suffix,
+    }
+    $prefer_local = $::cassandra_prefer_local ? {
+        undef   => '',
+        default => $::cassandra_prefer_local,
+    }
 }
