@@ -50,6 +50,7 @@ class cassandra::config(
     $client_encryption_truststore,
     $client_encryption_truststore_password,
     $client_encryption_cipher_suites,
+    $cassandra_user_shell,
 ) {
     group { 'cassandra':
         ensure  => present,
@@ -58,6 +59,7 @@ class cassandra::config(
 
     user { 'cassandra':
         ensure  => present,
+        shell   => $cassandra_user_shell,
         require => Group['cassandra'],
     }
 

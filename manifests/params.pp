@@ -362,4 +362,9 @@ class cassandra::params {
         undef   => '',
         default => $::cassandra_prefer_local,
     }
+
+    $cassandra_user_shell = $::cassandra_user_shell ? {
+        undef   => '/bin/false',
+        default => $::cassandra_user_shell
+    }
 }
