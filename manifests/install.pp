@@ -1,59 +1,27 @@
-class cassandra::install {
+# == Class cassandra::install
+#
+class cassandra::install inherits cassandra {
 
-    if !defined (Package['java']) {
-      package { 'java':
-        ensure  => installed,
-        name    => 'openjdk-7-jre'
-      }
-    }
+  yumrepo { 'cassandra::repo':
+    # repo_name => $repo_name,
+    baseurl   => $repo_baseurl,
+    # key_id    => $repo_key_id,
+    gpgkey    => $repo_gpgkey,
+    # repos     => $repo_repos,
+    # release   => $repo_release,
+    # pin       => $repo_pin,
+    gpgcheck  => $repo_gpgcheck,
+    enabled   => $repo_enabled,
+  }
 
-    package { 'dsc':
-        ensure  => $cassandra::version,
-        name    => $cassandra::package_name,
-        require => Package['java']
-    }
+  package { 'dsc':
+    ensure  => $version,
+    name    => $package_name,
+    require => Yumrepo['cassandra::repo']
+  }
 
-    $python_cql_name = $::osfamily ? {
-        'Debian'    => 'python-cql',
-        'RedHat'    => 'python26-cql',
-        default     => 'python-cql',
-    }
-
-    package { $python_cql_name:
-        ensure => installed,
-    }
-
-    if ($::osfamily == 'Debian') {
-        file { 'CASSANDRA-2356 /etc/cassandra':
-            ensure => directory,
-            path   => '/etc/cassandra',
-            owner  => 'root',
-            group  => 'root',
-            mode   => '0755',
-        }
-
-        exec { 'CASSANDRA-2356 Workaround':
-            path    => ['/sbin', '/bin', '/usr/sbin', '/usr/bin'],
-            command => '/etc/init.d/cassandra stop && rm -rf /var/lib/cassandra/*',
-            creates => '/etc/cassandra/CASSANDRA-2356',
-            user    => 'root',
-            require => [
-                    Package['dsc'],
-                    File['CASSANDRA-2356 /etc/cassandra'],
-                ],
-        }
-
-        file { 'CASSANDRA-2356 marker file':
-            ensure  => file,
-            path    => '/etc/cassandra/CASSANDRA-2356',
-            owner   => 'root',
-            group   => 'root',
-            mode    => '0644',
-            content => '# Workaround for CASSANDRA-2356',
-            require => [
-                    File['CASSANDRA-2356 /etc/cassandra'],
-                    Exec['CASSANDRA-2356 Workaround'],
-                ],
-        }
-    }
+  package { 'python26-cql':
+    ensure => installed,
+  }
+  
 }

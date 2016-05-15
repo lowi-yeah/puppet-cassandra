@@ -1,209 +1,152 @@
 require 'spec_helper'
 
 describe 'cassandra' do
+  context 'supported operating systems' do
+    ['RedHat'].each do |osfamily|
+      ['RedHat', 'CentOS', 'Amazon', 'Fedora'].each do |operatingsystem|
+        let(:facts) {{
+          :osfamily        => osfamily,
+          :operatingsystem => operatingsystem,
+          :processorcount => 1,
+          :ipaddress => '1.2.3.4'
+        }}
 
-  let(:facts)  do
-    { :osfamily => 'Debian',
-      :lsbdistid => 'debian',
-      :processorcount => 4,
-      :lsbdistcodename => 'squeeze',
-      :ipaddress => '1.2.3.4'
-    }
+        # default_broker_configuration_file  = '/etc/mosquitto/conf.d/mosquitto.conf'
+
+        context "with explicit data (no Hiera)" do
+
+          describe "cassandra with default settings on #{osfamily}" do
+            let(:params) {{ :seeds => ['1.2.3.4'], :broadcast_address => '4.3.2.1' }}
+            # We must mock $::operatingsystem because otherwise this test will
+            # fail when you run the tests on e.g. Mac OS X.
+            it { should compile.with_all_deps }
+
+            it { should contain_class('cassandra::params') }
+            it { should contain_class('cassandra') }
+            it { should contain_class('cassandra::users').that_comes_before('cassandra::install') }
+            it { should contain_class('cassandra::install').that_comes_before('cassandra::config') }
+            it { should contain_class('cassandra::config') }
+            it { should contain_class('cassandra::service').that_subscribes_to('cassandra::config') }
+
+            # it { should contain_package('cassandra').with_ensure('present') }
+
+            it { should contain_group('cassandra').with({
+              'ensure'     => 'present',
+              'gid'        => 53064,
+            })}
+
+            it { should contain_user('cassandra').with({
+              'ensure'     => 'present',
+              'home'       => '/home/cassandra',
+              'shell'      => '/bin/bash',
+              'uid'        => 53064,
+              'comment'    => 'Cassandra system account',
+              'gid'        => 'cassandra',
+              'managehome' => true
+            })}
+
+            #it { should contain_file('/opt/mosquitto/logs').with({
+            #  'ensure' => 'directory',
+            #  'owner'  => 'mosquitto',
+            #  'group'  => 'mosquitto',
+            #  'mode'   => '0755',
+            #})}
+
+#            it { should contain_file('/var/log/mosquitto').with({
+#              'ensure' => 'directory',
+#              'owner'  => 'mosquitto',
+#              'group'  => 'mosquitto',
+#              'mode'   => '0755',
+#            })}
+
+            # it { should contain_file(default_broker_configuration_file).with({
+            #     'ensure' => 'file',
+            #     'owner'  => 'root',
+            #     'group'  => 'root',
+            #     'mode'   => '0644',
+            #   }).
+            #   with_content(/\sport\s1883\s/)
+            # }
+
+
+            it { should contain_supervisor__service('cassandra').with({
+              'ensure'      => 'present',
+              'enable'      => true,
+              'command'     => 'service cassandra start',
+              'user'        => 'cassandra',
+              'group'       => 'cassandra',
+              'autorestart' => true,
+              'startsecs'   => 10,
+              'retries'     => 999,
+              'stopsignal'  => 'TERM',
+              'stopasgroup' => false,
+              'stopwait'    => 10,
+              'stdout_logfile_maxsize' => '20MB',
+              'stdout_logfile_keep'    => 5,
+              'stderr_logfile_maxsize' => '20MB',
+              'stderr_logfile_keep'    => 10,
+            })}
+          end
+
+
+          describe "cassandra with disabled user management on #{osfamily}" do
+            let(:params) {{
+              :user_manage  => false,
+            }}
+            it { should_not contain_group('cassandra') }
+            it { should_not contain_user('cassandra') }
+          end
+
+          describe "cassandra with custom user and group on #{osfamily}" do
+            let(:params) {{
+              :user_manage      => true,
+              :gid              => 456,
+              :group            => 'cassandragroup',
+              :uid              => 123,
+              :user             => 'cassandrauser',
+              :user_description => 'Cassandra user',
+              :user_home        => '/home/cassandrauser',
+            }}
+
+            it { should_not contain_group('cassandra') }
+            it { should_not contain_user('cassandra') }
+
+            it { should contain_user('cassandrauser').with({
+              'ensure'     => 'present',
+              'home'       => '/home/cassandrauser',
+              'shell'      => '/bin/bash',
+              'uid'        => 123,
+              'comment'    => 'Cassandra user',
+              'gid'        => 'cassandragroup',
+              'managehome' => true,
+            })}
+
+            it { should contain_group('cassandragroup').with({
+              'ensure'     => 'present',
+              'gid'        => 456,
+            })}
+          end
+
+          # describe "cassandra with a custom port on #{osfamily}" do
+          #   let(:params) {{
+          #     :port => 9093,
+          #   }}
+          #   it { should contain_file(default_broker_configuration_file).with_content(/\sport\s9093\s/) }
+          # end
+        end
+
+      end
+    end
   end
 
-  let(:params) {{ :seeds => ['1.2.3.4'], :broadcast_address => '4.3.2.1' }}
+  context 'unsupported operating system' do
+    describe 'cassandrag without any parameters on Debian' do
+      let(:facts) {{
+        :osfamily => 'Debian',
+      }}
 
-  context 'verify module' do
-
-    it 'does contain anchor cassandra::begin ' do
-      should contain_anchor('cassandra::begin')
-    end
-
-    it 'does contain class cassandra::repo' do
-      ## Default params from cassandra::params
-      should contain_class('cassandra::repo').with({
-        :repo_name => 'datastax',
-        :baseurl   => 'http://debian.datastax.com/community',
-        :gpgkey    => 'http://debian.datastax.com/debian/repo_key',
-        :repos     => 'main',
-        :release   => 'stable',
-        :pin       => '200',
-        :gpgcheck  => 0,
-        :enabled   => 1,
-      })
-    end
-
-    ## Install related resources. No dedicated spec file as it references variables
-    ## from cassandra
-    it 'does contain class cassandra::install' do
-      should contain_class('cassandra::install')
-    end
-
-    it 'does contain package dsc' do
-      should contain_package('dsc').with({
-        :name    => 'dsc21',
-      })
-    end
-
-    it 'does contain package python-cql' do
-      should contain_package('python-cql').with({
-        :ensure => 'installed',
-      })
-    end
-
-    it 'does contain directory /etc/cassandra' do
-      should contain_file('CASSANDRA-2356 /etc/cassandra').with({
-        :ensure => 'directory',
-        :path   => '/etc/cassandra',
-        :owner  => 'root',
-        :group  => 'root',
-        :mode   => '0755',
-      })
-    end
-
-    it 'does contain file /etc/cassandra/CASSANDRA-2356' do
-      should contain_file('CASSANDRA-2356 marker file').with({
-        :ensure  => 'file',
-        :path    => '/etc/cassandra/CASSANDRA-2356',
-        :owner   => 'root',
-        :group   => 'root',
-        :mode    => '0644',
-        :require => ['File[CASSANDRA-2356 /etc/cassandra]', 'Exec[CASSANDRA-2356 Workaround]'],
-      })
-    end
-
-    it 'does contain exec CASSANDRA-2356 Workaround' do
-      should contain_exec('CASSANDRA-2356 Workaround').with({
-        :command => '/etc/init.d/cassandra stop && rm -rf /var/lib/cassandra/*',
-        :creates => '/etc/cassandra/CASSANDRA-2356',
-        :require => ['Package[dsc]', 'File[CASSANDRA-2356 /etc/cassandra]'],
-      })
-    end
-    ## /Finished install resources
-    it 'does contain class cassandra::config' do
-      should contain_class('cassandra::config').with({
-        :max_heap_size              => '',
-        :heap_newsize               => '',
-        :jmx_port                   => 7199,
-        :additional_jvm_opts        => [],
-        :cluster_name               => 'Cassandra',
-        :listen_address             => '1.2.3.4',
-        :broadcast_address          => '4.3.2.1',
-        :rpc_address                => '0.0.0.0',
-        :rpc_port                   => 9160,
-        :rpc_server_type            => 'hsha',
-        :rpc_min_threads            => 0,
-        :rpc_max_threads            => 2048,
-        :storage_port               => 7000,
-        :partitioner                => 'org.apache.cassandra.dht.Murmur3Partitioner',
-        :data_file_directories      => ['/var/lib/cassandra/data'],
-        :commitlog_directory        => '/var/lib/cassandra/commitlog',
-        :saved_caches_directory     => '/var/lib/cassandra/saved_caches',
-        :initial_token              => '',
-        :seeds                      => ['1.2.3.4'],
-        :concurrent_reads           => 32,
-        :concurrent_writes          => 32,
-        :incremental_backups        => 'false',
-        :snapshot_before_compaction => 'false',
-        :auto_snapshot              => 'true',
-        :multithreaded_compaction   => 'false',
-        :endpoint_snitch            => 'SimpleSnitch',
-        :internode_compression      => 'all',
-        :disk_failure_policy        => 'stop',
-        :start_native_transport     => 'true',
-        :start_rpc                  => 'true',
-        :native_transport_port      => 9042,
-        :num_tokens                 => 256,
-      })
-    end
-
-    ## ervice related resources. No dedicated spec file as it references variables
-    ## from cassandra
-    it 'does contain class cassandra::service' do
-      should contain_class('cassandra::service')
-    end
-
-    it 'does contain service cassandra' do
-      should contain_service('cassandra').with({
-        :ensure     => 'running',
-        :enable     => 'true',
-        :hasstatus  => 'true',
-        :hasrestart => 'true',
-        :subscribe  => 'Class[Cassandra::Config]',
-        :require    => 'Class[Cassandra::Config]',
-      })
-    end
-    ## /Finished install resources
-
-    it 'does contain anchor cassandra::end ' do
-      should contain_anchor('cassandra::end')
-    end
-  end
-
-  context 'verify parameter' do
-
-    ## Array of arrays: {parameter => [[valid], [invalid]]}
-    test_pattern = {
-                    :include_repo               => [[true, false], ['bozo']],
-                    :commitlog_directory        => [['/tmp/test'], ['test/']],
-                    :saved_caches_directory     => [['/tmp/test'], ['test/']],
-                    :cluster_name               => [['bozo'], [true]],
-                    :partitioner                => [['bozo'], [true]],
-                    :initial_token              => [['bozo'], [true]],
-                    :endpoint_snitch            => [['bozo'], [true]],
-                    :rpc_server_type            => [['hsha', 'sync', 'async'], [9, 'bozo', true]],
-                    :rpc_min_threads            => [[1, 12, 65535], [-1, -10, "Banana"]],
-                    :rpc_max_threads            => [[1, 12, 65535], [-1, -10, "Banana"]],
-                    :incremental_backups        => [['true', 'false'], [9, 'bozo']],
-                    :snapshot_before_compaction => [['true', 'false'], [9, 'bozo']],
-                    :auto_snapshot              => [['true', 'false'], [9, 'bozo']],
-                    :multithreaded_compaction   => [['true', 'false'], [9, 'bozo']],
-                    :concurrent_reads           => [[1, 256, 42], ['bozo', 0.5, true]],
-                    :concurrent_writes          => [[1, 256, 42], ['bozo', 0.5, true]],
-                    :additional_jvm_opts        => [[['a', 'b']], ['bozo']],
-                    :seeds                      => [[['a', 'b']], ['bozo', []]],
-                    :data_file_directories      => [[['a', 'b']], ['bozo', '']],
-                    :jmx_port                   => [[1, 65535], [420000, true]],
-                    :listen_address             => [['1.2.3.4'], ['4.5.6']],
-                    :broadcast_address          => [['1.2.3.4'], ['1.2', 'foo']],
-                    :rpc_address                => [['1.2.3.4'], ['4.5.6']],
-                    :rpc_port                   => [[1, 65535], [420000, true]],
-                    :storage_port               => [[1, 65535], [420000, true]],
-                    :internode_compression      => [['all', 'dc' ,'none'], [9, 'bozo', true]],
-                    :disk_failure_policy        => [['stop', 'best_effort', 'ignore'], [9, 'bozo', true]],
-                    :start_native_transport     => [['true', 'false'], [9, 'bozo']],
-                    :start_rpc                  => [['true', 'false'], [9, 'bozo']],
-                    :native_transport_port      => [[1, 65535], [420000, true]],
-                    :num_tokens                 => [[1, 100000], [-1, true, 'bozo']],
-    }
-
-    test_pattern.each do |param, pattern|
-
-      describe "#{param} " do
-
-        pattern[0].each do |p|
-
-          let(:params) {{ :seeds => ['1.2.3.4'], param => p }}
-
-          it "succeeds with #{p}" do
-            should contain_class('cassandra::install')
-          end
-        end
-      end
-
-      describe "#{param}" do
-
-        pattern[1].each do |p|
-
-          let(:params) {{ :seeds => ['1.2.3.4'], param => p }}
-
-          it "fails with #{p}" do
-            expect {
-              should contain_class('cassandra::install')
-            }.to raise_error(Puppet::Error)
-          end
-        end
-      end
+      it { expect { should contain_class('cassandrag') }.to raise_error(Puppet::Error,
+        /The cassandrag module is not supported on a Debian based system./) }
     end
   end
 end
